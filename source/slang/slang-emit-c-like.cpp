@@ -740,7 +740,26 @@ String CLikeSourceEmitter::_generateUniqueName(const UnownedStringSlice& name)
     return sb.ProduceString();
 }
 
-String CLikeSourceEmitter::generateName(IRInst* inst)
+String CLikeSourceEmitter::_generateConsistentName(const UnownedStringSlice& name)
+{
+    // Cuz
+
+    StringBuilder sb;
+
+    appendScrubbedName(name, sb);
+
+    // Avoid introducing a double underscore
+    if (!sb.endsWith("_"))
+    {
+        sb.append("_");
+    }
+
+    sb.append("v");
+
+    return sb.ProduceString();
+}
+
+String CLikeSourceEmitter::generateName(IRInst* inst, bool consistentName)
 {
     // If the instruction names something
     // that should be emitted as a target intrinsic,
@@ -792,7 +811,7 @@ String CLikeSourceEmitter::generateName(IRInst* inst)
     // to provide the basis for the actual name in the output code.
     if(auto nameHintDecoration = inst->findDecoration<IRNameHintDecoration>())
     {
-        return _generateUniqueName(nameHintDecoration->getName());
+        return (consistentName) ? _generateConsistentName(nameHintDecoration->getName()) : _generateUniqueName(nameHintDecoration->getName());
     }
 
     // If the instruction has a linkage decoration, just use that. 
@@ -811,12 +830,12 @@ String CLikeSourceEmitter::generateName(IRInst* inst)
     return sb.ProduceString();
 }
 
-String CLikeSourceEmitter::getName(IRInst* inst)
+String CLikeSourceEmitter::getName(IRInst* inst, bool consistentName)
 {
     String name;
     if(!m_mapInstToName.TryGetValue(inst, name))
     {
-        name = generateName(inst);
+        name = generateName(inst, consistentName);
         m_mapInstToName.Add(inst, name);
     }
     return name;
@@ -2925,7 +2944,7 @@ void CLikeSourceEmitter::emitStruct(IRStructType* structType)
             emitInterpolationModifiers(fieldKey, fieldType, nullptr);
         }
 
-        emitType(fieldType, getName(fieldKey));
+        emitType(fieldType, getName(fieldKey, true));
         emitSemantics(fieldKey);
         m_writer->emit(";\n");
     }

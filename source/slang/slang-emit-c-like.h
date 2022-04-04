@@ -262,10 +262,10 @@ public:
         /// "Scrub" a name so that it complies with restrictions of the target language.
     void appendScrubbedName(const UnownedStringSlice& name, StringBuilder& out);
 
-    String generateName(IRInst* inst);
+    String generateName(IRInst* inst, bool consistentName = false);
     virtual String generateEntryPointNameImpl(IREntryPointDecoration* entryPointDecor);
 
-    String getName(IRInst* inst);
+    String getName(IRInst* inst, bool consistentName = false);
 
     void emitSimpleValue(IRInst* inst) { emitSimpleValueImpl(inst); }
     
@@ -472,6 +472,7 @@ public:
     void _emitCallArgList(IRCall* call);
 
     String _generateUniqueName(const UnownedStringSlice& slice);
+    String _generateConsistentName(const UnownedStringSlice& slice);
 
         // Sort witnessTable entries according to the order defined in the witnessed interface type.
     List<IRWitnessTableEntry*> getSortedWitnessTableEntries(IRWitnessTable* witnessTable);
