@@ -45,6 +45,15 @@ public:
         TargetRequest* targetRequest = nullptr;
     };
 
+    typedef unsigned int ENameMode;
+    enum
+    {
+        kENameMode_Untouched,
+        kENameMode_SlangPrefix,
+        kENameMode_MemberPrefix,
+        kENameMode_ID
+    };
+
     enum
     {
         kThreadGroupAxisCount = 3,
@@ -262,10 +271,11 @@ public:
         /// "Scrub" a name so that it complies with restrictions of the target language.
     void appendScrubbedName(const UnownedStringSlice& name, StringBuilder& out);
 
-    String generateName(IRInst* inst, bool consistentName = false);
+    String generateName(IRInst* inst, ENameMode nameMode = kENameMode_ID);
     virtual String generateEntryPointNameImpl(IREntryPointDecoration* entryPointDecor);
 
-    String getName(IRInst* inst, bool consistentName = false);
+    String getName(IRInst* inst, ENameMode nameMode = kENameMode_ID);
+    UInt getLayoutOffset(IRInst* inst);
 
     void emitSimpleValue(IRInst* inst) { emitSimpleValueImpl(inst); }
     
@@ -471,8 +481,7 @@ public:
         // Emit the argument list (including paranthesis) in a `CallInst`
     void _emitCallArgList(IRCall* call);
 
-    String _generateUniqueName(const UnownedStringSlice& slice);
-    String _generateConsistentName(const UnownedStringSlice& slice);
+    String _generateUniqueName(const UnownedStringSlice& slice, ENameMode nameMode);
 
         // Sort witnessTable entries according to the order defined in the witnessed interface type.
     List<IRWitnessTableEntry*> getSortedWitnessTableEntries(IRWitnessTable* witnessTable);

@@ -291,22 +291,26 @@ void GLSLSourceEmitter::_emitGLSLParameterGroup(IRGlobalParam* varDecl, IRUnifor
     else if (as<IRGLSLShaderStorageBufferType>(type))
     {
         // Is writable
-        m_writer->emit("layout(");
-        m_writer->emit(m_targetRequest->getForceGLSLScalarBufferLayout() ? "scalar" : "std430");
-        m_writer->emit(") buffer ");
+        //m_writer->emit("layout(");
+        //m_writer->emit(m_targetRequest->getForceGLSLScalarBufferLayout() ? "scalar" : "std430");
+        //m_writer->emit(") buffer ");
+        m_writer->emit("buffer ");
     }
     // TODO: what to do with HLSL `tbuffer` style buffers?
     else
     {
         // uniform is implicitly read only
-        m_writer->emit("layout(");
-        m_writer->emit(m_targetRequest->getForceGLSLScalarBufferLayout() ? "scalar" : "std140");
-        m_writer->emit(") uniform ");
+        //m_writer->emit("layout(");
+        //m_writer->emit(m_targetRequest->getForceGLSLScalarBufferLayout() ? "scalar" : "std140");
+        //m_writer->emit(") uniform ");
+        m_writer->emit("uniform ");
     }
 
     // Generate a dummy name for the block
-    m_writer->emit("_S");
-    m_writer->emit(m_uniqueIDCounter++);
+    m_writer->emit("_");
+    {
+        m_writer->emit(getName(varDecl, kENameMode_Untouched));
+    }
 
     m_writer->emit("\n{\n");
     m_writer->indent();
@@ -319,13 +323,13 @@ void GLSLSourceEmitter::_emitGLSLParameterGroup(IRGlobalParam* varDecl, IRUnifor
     m_writer->dedent();
     m_writer->emit("} ");
 
-    m_writer->emit(getName(varDecl));
+    m_writer->emit(getName(varDecl, kENameMode_SlangPrefix));
 
     // If the underlying variable was an array (or array of arrays, etc.)
     // we need to emit all those array brackets here.
     emitArrayBrackets(varDecl->getDataType());
 
-    m_writer->emit(";\n");
+    m_writer->emit(";\n\n");
 }
 
 void GLSLSourceEmitter::_emitGLSLImageFormatModifier(IRInst* var, IRTextureType* resourceType)
@@ -2194,11 +2198,11 @@ void GLSLSourceEmitter::emitMatrixLayoutModifiersImpl(IRVarLayout* layout)
         switch (matrixTypeLayout->getMode())
         {
             case kMatrixLayoutMode_ColumnMajor:
-                m_writer->emit("layout(row_major)\n");
+                //m_writer->emit("layout(row_major)\n");
                 break;
 
             case kMatrixLayoutMode_RowMajor:
-                m_writer->emit("layout(column_major)\n");
+                //m_writer->emit("layout(column_major)\n");
                 break;
         }
     }

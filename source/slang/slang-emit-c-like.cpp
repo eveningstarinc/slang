@@ -696,7 +696,7 @@ String CLikeSourceEmitter::generateEntryPointNameImpl(IREntryPointDecoration* en
     return entryPointDecor->getName()->getStringSlice();
 }
 
-String CLikeSourceEmitter::_generateUniqueName(const UnownedStringSlice& name)
+String CLikeSourceEmitter::_generateUniqueName(const UnownedStringSlice& name, ENameMode nameMode)
 {
     //
     // We need to be careful that the name follows the rules of the target language,
@@ -722,44 +722,48 @@ String CLikeSourceEmitter::_generateUniqueName(const UnownedStringSlice& name)
     
     StringBuilder sb;
 
-    appendScrubbedName(name, sb);
-
-    // Avoid introducing a double underscore
-    if (!sb.endsWith("_"))
+    switch (nameMode)
     {
-        sb.append("_");
+    case kENameMode_Untouched:
+        appendScrubbedName(name, sb);
+        break;
+
+    case kENameMode_SlangPrefix:
+        sb.Append("sl_");
+        appendScrubbedName(name, sb);
+        break;
+
+    case kENameMode_MemberPrefix:
+        sb.Append("m_");
+        appendScrubbedName(name, sb);
+        break;
+
+    case kENameMode_ID:
+    default:
+        {
+            appendScrubbedName(name, sb);
+
+            // Avoid introducing a double underscore
+            if (!sb.endsWith("_"))
+            {
+                sb.append("_");
+            }
+
+            String key = sb.ProduceString();
+
+            UInt& countRef = m_uniqueNameCounters.GetOrAddValue(key, 0);
+            const UInt count = countRef;
+            countRef = count + 1;
+
+            sb.append(Int32(count));
+        }
+        break;
     }
 
-    String key = sb.ProduceString();
-    
-    UInt& countRef = m_uniqueNameCounters.GetOrAddValue(key, 0);
-    const UInt count = countRef;
-    countRef = count + 1;
-
-    sb.append(Int32(count));
     return sb.ProduceString();
 }
 
-String CLikeSourceEmitter::_generateConsistentName(const UnownedStringSlice& name)
-{
-    // Cuz
-
-    StringBuilder sb;
-
-    appendScrubbedName(name, sb);
-
-    // Avoid introducing a double underscore
-    if (!sb.endsWith("_"))
-    {
-        sb.append("_");
-    }
-
-    sb.append("v");
-
-    return sb.ProduceString();
-}
-
-String CLikeSourceEmitter::generateName(IRInst* inst, bool consistentName)
+String CLikeSourceEmitter::generateName(IRInst* inst, ENameMode nameMode)
 {
     // If the instruction names something
     // that should be emitted as a target intrinsic,
@@ -811,7 +815,7 @@ String CLikeSourceEmitter::generateName(IRInst* inst, bool consistentName)
     // to provide the basis for the actual name in the output code.
     if(auto nameHintDecoration = inst->findDecoration<IRNameHintDecoration>())
     {
-        return (consistentName) ? _generateConsistentName(nameHintDecoration->getName()) : _generateUniqueName(nameHintDecoration->getName());
+        return _generateUniqueName(nameHintDecoration->getName(), nameMode);
     }
 
     // If the instruction has a linkage decoration, just use that. 
@@ -819,6 +823,32 @@ String CLikeSourceEmitter::generateName(IRInst* inst, bool consistentName)
     {
         // Just use the linkages mangled name directly.
         return linkageDecoration->getMangledName();
+    }
+
+    // If the instruction has a layout, construct a name based on its location
+    auto layout = getVarLayout(inst);
+
+    if (layout)
+    {
+        StringBuilder sb;
+
+        for (auto rr : layout->getOffsetAttrs())
+        {
+            switch (rr->getResourceKind())
+            {
+            case LayoutResourceKind::VaryingInput:
+                sb << "_I";
+                sb << Int32(rr->getOffset());
+                break;
+
+            case LayoutResourceKind::VaryingOutput:
+                sb << "_O";
+                sb << Int32(rr->getOffset());
+                break;
+            }
+        }
+
+        return sb.ProduceString();
     }
 
     // Otherwise fall back to a construct temporary name
@@ -830,15 +860,37 @@ String CLikeSourceEmitter::generateName(IRInst* inst, bool consistentName)
     return sb.ProduceString();
 }
 
-String CLikeSourceEmitter::getName(IRInst* inst, bool consistentName)
+String CLikeSourceEmitter::getName(IRInst* inst, ENameMode nameMode)
 {
     String name;
     if(!m_mapInstToName.TryGetValue(inst, name))
     {
-        name = generateName(inst, consistentName);
+        name = generateName(inst, nameMode);
         m_mapInstToName.Add(inst, name);
     }
     return name;
+}
+
+UInt CLikeSourceEmitter::getLayoutOffset(IRInst* inst)
+{
+    auto layout = getVarLayout(inst);
+
+    if (layout)
+    {
+        StringBuilder sb;
+
+        for (auto rr : layout->getOffsetAttrs())
+        {
+            switch (rr->getResourceKind())
+            {
+            case LayoutResourceKind::VaryingInput:
+            case LayoutResourceKind::VaryingOutput:
+                return rr->getOffset();
+            }
+        }
+    }
+
+    return 0U;
 }
 
 void CLikeSourceEmitter::emitSimpleValueImpl(IRInst* inst)
@@ -2742,7 +2794,7 @@ void CLikeSourceEmitter::emitSimpleFuncImpl(IRFunc* func)
 
     emitFunctionPreambleImpl(func);
 
-    auto name = getName(func);
+    auto name = getName(func, kENameMode_Untouched);
 
     emitFuncDecorations(func);
 
@@ -2823,7 +2875,7 @@ void CLikeSourceEmitter::emitFuncDecl(IRFunc* func)
     auto funcType = func->getDataType();
     auto resultType = func->getResultType();
 
-    auto name = getName(func);
+    auto name = getName(func, kENameMode_Untouched);
 
     emitFuncDecorations(func);
     emitType(resultType, name);
@@ -2924,7 +2976,7 @@ void CLikeSourceEmitter::emitStruct(IRStructType* structType)
 
     emitPostKeywordTypeAttributes(structType);
 
-    m_writer->emit(getName(structType));
+    m_writer->emit(getName(structType, kENameMode_Untouched));
     m_writer->emit("\n{\n");
     m_writer->indent();
 
@@ -2944,7 +2996,7 @@ void CLikeSourceEmitter::emitStruct(IRStructType* structType)
             emitInterpolationModifiers(fieldKey, fieldType, nullptr);
         }
 
-        emitType(fieldType, getName(fieldKey, true));
+        emitType(fieldType, getName(fieldKey, kENameMode_MemberPrefix));
         emitSemantics(fieldKey);
         m_writer->emit(";\n");
     }
